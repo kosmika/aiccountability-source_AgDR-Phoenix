@@ -144,8 +144,7 @@ Structural container monitoring (e.g., the AGA standard) records whether the sys
 ## Specification and Standards
 
 | Resource | Reference |
-|---|---|
-| AgDR Full Specification v0.2 | ISBN 978-1-7389042-0-4 |
+|---|---| |
 | Reasoning Capture Methodology v1.0 | ISBN 978-1-7389042-1-1 |
 | W3C Standing | First Sponsor Standing, effective March 21, 2026 |
 | Library and Archives Canada | Deposited under CC-BY 4.0 |
