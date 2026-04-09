@@ -31,8 +31,8 @@ The result is a tamper-evident, court-admissible decision record with a clear ch
 
 | Operation | Latency |
 |---|---|
-| Atomic Kernel Inference (hot path) | 0.6 — 2 µs |
-| Full sealed record (WAL + Merkle) | 10 — 50 µs |
+| Atomic Kernel Inference (hot path) | 0.6 - 2 µs |
+| Full sealed record (WAL + Merkle) | 10 - 50 µs |
 | ZK proof generation | < 10 ms |
 | ZK verification (Merkle root only) | < 10 ms |
 
@@ -109,11 +109,11 @@ print(court_pkg)
 
 | Concept | Description |
 |---|---|
-| **PPP Triplet** | Provenance, Place, Purpose — immutable legal anchor recorded at inference time |
+| **PPP Triplet** | Provenance, Place, Purpose immutable legal anchor recorded at inference time |
 | **Atomic Kernel Inference (AKI)** | Sub-microsecond sealed decision capture at the exact moment of inference |
-| **HumanDeltaChain** | Required fiduciary link tracking human oversight or escalation — enforced at API level |
-| **Coherence Score** | Normalized cosine similarity against the agent's historical spine (0.0 — 1.0) |
-| **Reputation Scalar** | Exponentially weighted moving average of past coherence — longitudinal reliability signal |
+| **HumanDeltaChain** | Required fiduciary link tracking human oversight or escalation and enforced at API level |
+| **Coherence Score** | Normalized cosine similarity against the agent's historical spine (0.0 - 1.0) |
+| **Reputation Scalar** | Exponentially weighted moving average of past coherence, provides a longitudinal reliability signal |
 | **Sealed Record** | Tamper-evident post-encryption object with BLAKE3 hash and Ed25519 signature |
 | **Zero-Knowledge Proof** | Selective disclosure of record integrity without revealing decision content |
 
@@ -146,7 +146,6 @@ Structural container monitoring (e.g., the AGA standard) records whether the sys
 | Resource | Reference |
 |---|---| |
 | Reasoning Capture Methodology v1.0 | ISBN 978-1-7389042-1-1 |
-| W3C Standing | First Sponsor Standing, effective March 21, 2026 |
 | Library and Archives Canada | Deposited under CC-BY 4.0 |
 | Steward | Genesis Glass Foundation — federally incorporated, royalty-free anchor in articles of incorporation |
 
