@@ -9,78 +9,100 @@ use ed25519_dalek::{Signer, SigningKey};
 use chrono::Utc;
 use uuid::Uuid;
 use rand::rngs::OsRng;
+use std::path::Path;
 
+// ── PPPTriplet ────────────────────────────────────────────────────────────────
+
+#[pyclass]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PPPTriplet {
-    pub provenance: String,
-    pub place: String,
-    pub purpose: String,
+    #[pyo3(get, set)] pub provenance: String,
+    #[pyo3(get, set)] pub place: String,
+    #[pyo3(get, set)] pub purpose: String,
 }
 
+#[pymethods]
+impl PPPTriplet {
+    #[new]
+    #[pyo3(signature = (provenance, place, purpose))]
+    fn new(provenance: String, place: String, purpose: String) -> Self {
+        Self { provenance, place, purpose }
+    }
+}
+
+// ── HumanDeltaChain ───────────────────────────────────────────────────────────
+
+#[pyclass]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct HumanDeltaChain {
-    pub chain_id: String,
-    pub agent_decision_ref: String,
-    pub resolved: bool,
-    pub terminal_node: String,
+    #[pyo3(get, set)] pub chain_id: String,
+    #[pyo3(get, set)] pub agent_decision_ref: String,
+    #[pyo3(get, set)] pub resolved: bool,
+    #[pyo3(get, set)] pub terminal_node: String,
 }
+
+#[pymethods]
+impl HumanDeltaChain {
+    #[new]
+    #[pyo3(signature = (agent_decision_ref, resolved, terminal_node, chain_id=None))]
+    fn new(
+        agent_decision_ref: String,
+        resolved: bool,
+        terminal_node: String,
+        chain_id: Option<String>,
+    ) -> Self {
+        Self {
+            chain_id: chain_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
+            agent_decision_ref,
+            resolved,
+            terminal_node,
+        }
+    }
+}
+
+// ── Internal structs ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct CaptureRequest {
-    pub ctx: serde_json::Value,
-    pub prompt: String,
-    pub reasoning_trace: serde_json::Value,
-    pub output: String,
-    pub ppp: PPPTriplet,
-    pub human_delta_chain: Option<HumanDeltaChain>,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct DeltaEmbedding {
-    pub vector: Vec<i8>,   // was [i8; 64] — serde only handles arrays up to [T; 32]
+    pub vector: Vec<i8>,
     pub confidence: f64,
     pub delta_norm: f64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CoreInsightToken {
     pub lesson: String,
     pub confidence: f64,
     pub delta: Option<DeltaEmbedding>,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct SealedRecord {
-    pub id: String,
-    pub timestamp: String,
-    pub hash: String,
-    pub signature: Vec<u8>,
-    pub ppp: PPPTriplet,
-    pub ctx: serde_json::Value,
-    pub prompt: String,
-    pub reasoning_trace: serde_json::Value,
-    pub output: String,
-    pub merkle_root: String,
-    pub coherence_score: f64,
-    pub reputation_scalar: f64,
-    pub core_insight: Option<CoreInsightToken>,
-    pub human_delta_chain: Option<HumanDeltaChain>,
-}
+// ── SealedRecord ──────────────────────────────────────────────────────────────
 
 #[pyclass]
-pub struct PhoenixKernel {
-    signing_key: SigningKey,
-    merkle_root: Blake3Hash,
-    spine: VecDeque<[f32; 64]>,
-    reputation: f64,
-    coherence_threshold: f64,
-    wal_path: String,
-    max_spine_size: usize,
+#[derive(Serialize, Deserialize)]
+pub struct SealedRecord {
+    #[pyo3(get)] pub id: String,
+    #[pyo3(get)] pub timestamp: String,
+    #[pyo3(get)] pub hash: String,
+    #[pyo3(get)] pub signature: Vec<u8>,
+    #[pyo3(get)] pub merkle_root: String,
+    #[pyo3(get)] pub coherence_score: f64,
+    #[pyo3(get)] pub reputation_scalar: f64,
+    #[pyo3(get)] pub ppp_json: String,
+    #[pyo3(get)] pub ctx_json: String,
+    #[pyo3(get)] pub prompt: String,
+    #[pyo3(get)] pub reasoning_trace_json: String,
+    #[pyo3(get)] pub output: String,
+    #[pyo3(get)] pub human_delta_chain_json: String,
+    #[pyo3(get)] pub core_insight_json: Option<String>,
 }
 
-use std::path::Path;
+// ── Key management ────────────────────────────────────────────────────────────
 
 fn load_or_generate_signing_key(wal_path: &str) -> SigningKey {
+    if wal_path == ":memory:" {
+        return SigningKey::generate(&mut OsRng);
+    }
     let key_path = format!("{}.key", wal_path);
     if Path::new(&key_path).exists() {
         let bytes = std::fs::read(&key_path).expect("Failed to read signing key");
@@ -93,14 +115,23 @@ fn load_or_generate_signing_key(wal_path: &str) -> SigningKey {
     }
 }
 
-// Internal methods — NOT exposed to Python
-impl PhoenixKernel {
+// ── AKIEngine internal ────────────────────────────────────────────────────────
+
+pub struct AKIEngine {
+    signing_key: SigningKey,
+    merkle_root: Blake3Hash,
+    spine: VecDeque<[f32; 64]>,
+    reputation: f64,
+    coherence_threshold: f64,
+    wal_path: String,
+    max_spine_size: usize,
+}
+
+impl AKIEngine {
     fn weighted_spine_average(&self) -> [f32; 64] {
         let mut avg = [0.0f32; 64];
         let n = self.spine.len();
-        if n == 0 {
-            return avg;
-        }
+        if n == 0 { return avg; }
         let lambda = 0.98f32;
         let z = (1.0 - lambda.powi(n as i32)) / (1.0 - lambda);
         for (i, emb) in self.spine.iter().enumerate() {
@@ -118,47 +149,78 @@ impl PhoenixKernel {
     }
 
     fn append_to_wal(&self, record: &SealedRecord) {
+        if self.wal_path == ":memory:" { return; }
         if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&self.wal_path) {
-            let _ = writeln!(file, "{}", serde_json::to_string(record).unwrap());
+            let _ = writeln!(file, "{}", serde_json::to_string(record).unwrap_or_default());
         }
     }
 }
 
-// Python-exposed methods
+// ── AKIEngine Python API ──────────────────────────────────────────────────────
+
+#[pyclass]
+#[pyo3(name = "AKIEngine")]
+pub struct PyAKIEngine {
+    inner: AKIEngine,
+}
+
 #[pymethods]
-impl PhoenixKernel {
+impl PyAKIEngine {
     #[new]
-    fn new(wal_path: String, _enable_gpu: bool) -> Self {
-        let _ = OpenOptions::new().create(true).append(true).open(&wal_path);
+    fn new(wal_path: String) -> Self {
+        if wal_path != ":memory:" {
+            let _ = OpenOptions::new().create(true).append(true).open(&wal_path);
+        }
         Self {
-            signing_key: load_or_generate_signing_key(&wal_path),
-            merkle_root: blake3::hash(b"genesis"),
-            spine: VecDeque::with_capacity(500),
-            reputation: 0.5,
-            coherence_threshold: 0.92,
-            wal_path,
-            max_spine_size: 500,
+            inner: AKIEngine {
+                signing_key: load_or_generate_signing_key(&wal_path),
+                merkle_root: blake3::hash(b"genesis"),
+                spine: VecDeque::with_capacity(500),
+                reputation: 0.5,
+                coherence_threshold: 0.92,
+                wal_path,
+                max_spine_size: 500,
+            },
         }
     }
 
-    fn capture(&mut self, request_json: String, auto_insight: bool) -> String {
-        let req: CaptureRequest = match serde_json::from_str(&request_json) {
-            Ok(r) => r,
-            Err(_) => return r#"{"error":"invalid request"}"#.to_string(),
+    #[pyo3(signature = (ctx, prompt, reasoning_trace, output, ppp_triplet, human_delta_chain, auto_insight=true))]
+    fn capture(
+        &mut self,
+        py: Python<'_>,
+        ctx: &Bound<'_, PyAny>,
+        prompt: String,
+        reasoning_trace: &Bound<'_, PyAny>,
+        output: String,
+        ppp_triplet: PyRef<PPPTriplet>,
+        human_delta_chain: PyRef<HumanDeltaChain>,
+        auto_insight: bool,
+    ) -> PyResult<SealedRecord> {
+        let json_module = py.import_bound("json")?;
+        let ctx_json: String = json_module.call_method1("dumps", (ctx,))?.extract()?;
+        let trace_json: String = json_module.call_method1("dumps", (reasoning_trace,))?.extract()?;
+
+        let ppp = ppp_triplet.clone();
+        let hdc = HumanDeltaChain {
+            chain_id: human_delta_chain.chain_id.clone(),
+            agent_decision_ref: human_delta_chain.agent_decision_ref.clone(),
+            resolved: human_delta_chain.resolved,
+            terminal_node: human_delta_chain.terminal_node.clone(),
         };
 
-        let seed = (req.prompt.len() + req.output.len()) as f32;
+        // Embedding
+        let seed = (prompt.len() + output.len()) as f32;
         let mut current = [0.0f32; 64];
         for i in 0..64 {
             current[i] = ((seed + i as f32 * 0.37) % 6.28).sin() * 0.6 + 0.4;
         }
 
-        self.spine.push_front(current);
-        if self.spine.len() > self.max_spine_size {
-            self.spine.pop_back();
+        self.inner.spine.push_front(current);
+        if self.inner.spine.len() > self.inner.max_spine_size {
+            self.inner.spine.pop_back();
         }
 
-        let spine_avg = self.weighted_spine_average();
+        let spine_avg = self.inner.weighted_spine_average();
 
         let mut dot = 0.0f64;
         let mut norm_a = 0.0f64;
@@ -176,7 +238,7 @@ impl PhoenixKernel {
             0.5
         };
 
-        let core_insight = if auto_insight && coherence >= self.coherence_threshold {
+        let core_insight = if auto_insight && coherence >= self.inner.coherence_threshold {
             let mut delta_vec = vec![0i8; 64];
             for i in 0..64 {
                 let diff = (current[i] - spine_avg[i]) * 127.0;
@@ -195,41 +257,52 @@ impl PhoenixKernel {
             None
         };
 
-        self.reputation = 0.98 * self.reputation + 0.02 * coherence;
+        self.inner.reputation = 0.98 * self.inner.reputation + 0.02 * coherence;
 
-        let canonical = format!("{:?}{:?}{:?}", req, coherence, self.reputation);
+        let canonical = format!(
+            "{}{}{}{}{:?}{:?}",
+            ppp.provenance, ppp.place, ppp.purpose,
+            prompt, coherence, self.inner.reputation
+        );
         let record_hash = blake3::hash(canonical.as_bytes());
-        let signature = self.signing_key.sign(record_hash.as_bytes()).to_bytes().to_vec();
-        self.merkle_root = self.update_merkle_root(&record_hash);
+        let signature = self.inner.signing_key.sign(record_hash.as_bytes()).to_bytes().to_vec();
+        self.inner.merkle_root = self.inner.update_merkle_root(&record_hash);
 
         let record = SealedRecord {
             id: format!("aki_{}", Uuid::new_v4()),
             timestamp: Utc::now().to_rfc3339(),
             hash: record_hash.to_hex().to_string(),
             signature,
-            ppp: req.ppp,
-            ctx: req.ctx,
-            prompt: req.prompt,
-            reasoning_trace: req.reasoning_trace,
-            output: req.output,
-            merkle_root: self.merkle_root.to_hex().to_string(),
+            merkle_root: self.inner.merkle_root.to_hex().to_string(),
             coherence_score: coherence,
-            reputation_scalar: self.reputation,
-            core_insight,
-            human_delta_chain: req.human_delta_chain,
+            reputation_scalar: self.inner.reputation,
+            ppp_json: serde_json::to_string(&ppp).unwrap_or_default(),
+            ctx_json,
+            prompt,
+            reasoning_trace_json: trace_json,
+            output,
+            human_delta_chain_json: serde_json::to_string(&hdc).unwrap_or_default(),
+            core_insight_json: core_insight
+                .as_ref()
+                .and_then(|c| serde_json::to_string(c).ok()),
         };
 
-        self.append_to_wal(&record);
-        serde_json::to_string(&record).unwrap()
+        self.inner.append_to_wal(&record);
+        Ok(record)
     }
 
     fn public_key_hex(&self) -> String {
-        hex::encode(self.signing_key.verifying_key().to_bytes())
+        hex::encode(self.inner.signing_key.verifying_key().to_bytes())
     }
 }
 
+// ── Module ────────────────────────────────────────────────────────────────────
+
 #[pymodule]
 fn agdr_aki(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PhoenixKernel>()?;
+    m.add_class::<PyAKIEngine>()?;
+    m.add_class::<PPPTriplet>()?;
+    m.add_class::<HumanDeltaChain>()?;
+    m.add_class::<SealedRecord>()?;
     Ok(())
 }
