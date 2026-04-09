@@ -1,0 +1,26 @@
+# Rust
+/target/
+/Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.agdr-aki/
+
+# Maturin / build
+*.egg-info/
+dist/
+build/
+wheels/
+
+# Database and data
+*.db
+*.sqlite3
+*.wal
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
