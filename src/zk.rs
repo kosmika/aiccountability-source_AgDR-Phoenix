@@ -1,6 +1,7 @@
 use pyo3::prelude::*;
 use blake3;
 use serde::{Serialize, Deserialize};
+use crate::Record;   // ← This line fixes the error!
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ZKProof {
