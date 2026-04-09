@@ -1,19 +1,21 @@
-from agdr_aki import AKIEngine, PPPTriplet
+import json
+from agdr_aki import PhoenixKernel
 
 def test_capture():
-    engine = AKIEngine(":memory:")
-    ppp = PPPTriplet(
-        provenance="test",
-        place="Toronto",
-        purpose="test"
-    )
-    record = engine.capture(
-        ctx={},
-        prompt="test",
-        reasoning_trace={},
-        output="test",
-        ppp_triplet=ppp
-    )
-    assert record.id.startswith("aki_")
-    assert 0.0 <= record.coherence_score <= 1.0
+    engine = PhoenixKernel(":memory:", False)
+    request = json.dumps({
+        "ctx": {},
+        "prompt": "test",
+        "reasoning_trace": {},
+        "output": "test",
+        "ppp": {
+            "provenance": "test",
+            "place": "Toronto",
+            "purpose": "test"
+        },
+        "human_delta_chain": None
+    })
+    result = json.loads(engine.capture(request, False))
+    assert result["id"].startswith("aki_")
+    assert 0.0 <= result["coherence_score"] <= 1.0
     print("✅ Basic test passed")
