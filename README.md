@@ -4,7 +4,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://spdx.org/licenses/Apache-2.0)
 [![License: CC0 1.0](https://img.shields.io/badge/License-CC0_1.0-lightgrey.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
 [![Runtime: Rust + PyO3](https://img.shields.io/badge/Runtime-Rust_%2B_PyO3-orange.svg)](https://pyo3.rs)
-[![W3C Sponsor](https://img.shields.io/badge/W3C-First_Sponsor_Standing-005A9C.svg)](https://www.w3.org)
+
 [![Stewarded by GGF](https://img.shields.io/badge/Stewarded_by-Genesis_Glass_Foundation-4B0082.svg)](https://accountability.ai)
 
 **Atomic Kernel Inference SDK for Phoenix v1.8 Ultra**
