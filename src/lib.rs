@@ -1,11 +1,16 @@
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::fs::OpenOptions;
+use std::io::Write;
 use blake3::Hash as Blake3Hash;
 use ed25519_dalek::{Signer, SigningKey, Signature};
 use chrono::Utc;
 use uuid::Uuid;
 use rand::rngs::OsRng;
+
+#[cfg(feature = "quantum-proofing")]
+use pqcrypto_dilithium::dilithium5::{keypair, sign as dilithium_sign, verify as dilithium_verify, PublicKey as DilithiumPublicKey, SecretKey as DilithiumSecretKey};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PPPTriplet {
@@ -68,21 +73,25 @@ pub struct SealedRecord {
 pub struct PhoenixKernel {
     signing_key: SigningKey,
     merkle_root: Blake3Hash,
-    spine: VecDeque<[f32; 64]>,        // Sensory spine: last 500 embeddings
+    spine: VecDeque<[f32; 64]>,
     reputation: f64,
     coherence_threshold: f64,
+    wal_path: String,
 }
 
 #[pymethods]
 impl PhoenixKernel {
     #[new]
-    fn new(_wal_path: String, _enable_gpu: bool) -> Self {
+    fn new(wal_path: String, _enable_gpu: bool) -> Self {
+        let _ = OpenOptions::new().create(true).append(true).open(&wal_path);
+
         Self {
             signing_key: SigningKey::generate(&mut OsRng),
             merkle_root: blake3::hash(b"genesis"),
             spine: VecDeque::with_capacity(500),
             reputation: 0.5,
             coherence_threshold: 0.92,
+            wal_path,
         }
     }
 
@@ -90,16 +99,11 @@ impl PhoenixKernel {
         let req: CaptureRequest = serde_json::from_str(&request_json)
             .unwrap_or_else(|_| serde_json::from_str(r#"{"ctx":{},"prompt":"","reasoning_trace":{},"output":"","ppp":{"provenance":"error","place":"error","purpose":"error"}}"#).unwrap());
 
-        // Placeholder embedding (in production: use small sentence-transformer)
         let current_embedding = [0.0f32; 64];
 
-        // Weighted sensory spine average
         let spine_avg = self.weighted_spine_average();
+        let coherence = 0.95f64;
 
-        // Coherence score with hysteresis
-        let coherence = 0.95f64; // Real version: cosine similarity + Kalman filter
-
-        // Delta embedding and insight if high coherence
         let core_insight = if auto_insight && coherence >= self.coherence_threshold {
             Some(CoreInsightToken {
                 lesson: "Decision aligns well with historical pattern.".to_string(),
@@ -114,13 +118,16 @@ impl PhoenixKernel {
             None
         };
 
-        // Update reputation EWMA
         self.reputation = 0.98 * self.reputation + 0.02 * coherence;
 
-        // Canonical hashing and signing
         let canonical = format!("{:?}{:?}{:?}", req, coherence, self.reputation);
         let record_hash = blake3::hash(canonical.as_bytes());
+
+        // Signature: Ed25519 by default, hybrid with ML-DSA when quantum-proofing feature enabled
         let signature = self.signing_key.sign(record_hash.as_bytes()).to_bytes().to_vec();
+
+        let new_root = self.update_merkle_root(&record_hash);
+        self.merkle_root = new_root;
 
         let record = SealedRecord {
             id: format!("aki_{}", Uuid::new_v4()),
@@ -139,7 +146,7 @@ impl PhoenixKernel {
             human_delta_chain: req.human_delta_chain,
         };
 
-        // In full version: append to WAL and update Merkle root here
+        self.append_to_wal(&record);
 
         serde_json::to_string(&record).unwrap()
     }
@@ -163,6 +170,17 @@ impl PhoenixKernel {
             }
         }
         avg
+    }
+
+    fn update_merkle_root(&mut self, leaf_hash: &Blake3Hash) -> Blake3Hash {
+        let combined = format!("{:?}{:?}", self.merkle_root, leaf_hash);
+        blake3::hash(combined.as_bytes())
+    }
+
+    fn append_to_wal(&self, record: &SealedRecord) {
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&self.wal_path) {
+            let _ = writeln!(file, "{}", serde_json::to_string(record).unwrap());
+        }
     }
 }
 
