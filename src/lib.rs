@@ -305,5 +305,6 @@ fn agdr_aki(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PPPTriplet>()?;
     m.add_class::<HumanDeltaChain>()?;
     m.add_class::<SealedRecord>()?;
+    m.add_class::<zk::ZKProof>()?;
     Ok(())
 }
