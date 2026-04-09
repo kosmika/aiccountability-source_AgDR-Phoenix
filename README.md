@@ -1,5 +1,7 @@
 # AgDR-Phoenix v1.8.0
 
+[![CI](https://github.com/aiccountability-source/AgDR-Phoenix/actions/workflows/ci.yml/badge.svg)](https://github.com/aiccountability-source/AgDR-Phoenix/actions/workflows/ci.yml)
+
 **Atomic Kernel Inference SDK for Phoenix v1.8 Ultra**  
 Developed by the [Genesis Glass Foundation](https://accountability.ai) | founding@accountability.ai
 
