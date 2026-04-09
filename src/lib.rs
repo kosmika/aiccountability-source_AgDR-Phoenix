@@ -4,13 +4,10 @@ use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::io::Write;
 use blake3::Hash as Blake3Hash;
-use ed25519_dalek::{Signer, SigningKey, Signature};
+use ed25519_dalek::{Signer, SigningKey};
 use chrono::Utc;
 use uuid::Uuid;
 use rand::rngs::OsRng;
-
-#[cfg(feature = "quantum-proofing")]
-use pqcrypto_dilithium::dilithium5::{keypair, sign as dilithium_sign, verify as dilithium_verify, PublicKey as DilithiumPublicKey, SecretKey as DilithiumSecretKey};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PPPTriplet {
@@ -77,6 +74,7 @@ pub struct PhoenixKernel {
     reputation: f64,
     coherence_threshold: f64,
     wal_path: String,
+    max_spine_size: usize,
 }
 
 #[pymethods]
@@ -84,7 +82,6 @@ impl PhoenixKernel {
     #[new]
     fn new(wal_path: String, _enable_gpu: bool) -> Self {
         let _ = OpenOptions::new().create(true).append(true).open(&wal_path);
-
         Self {
             signing_key: SigningKey::generate(&mut OsRng),
             merkle_root: blake3::hash(b"genesis"),
@@ -92,26 +89,61 @@ impl PhoenixKernel {
             reputation: 0.5,
             coherence_threshold: 0.92,
             wal_path,
+            max_spine_size: 500,
         }
     }
 
     fn capture(&mut self, request_json: String, auto_insight: bool) -> String {
-        let req: CaptureRequest = serde_json::from_str(&request_json)
-            .unwrap_or_else(|_| serde_json::from_str(r#"{"ctx":{},"prompt":"","reasoning_trace":{},"output":"","ppp":{"provenance":"error","place":"error","purpose":"error"}}"#).unwrap());
+        let req: CaptureRequest = match serde_json::from_str(&request_json) {
+            Ok(r) => r,
+            Err(_) => return r#"{"error":"invalid request"}"#.to_string(),
+        };
 
-        let current_embedding = [0.0f32; 64];
+        // Simple, deterministic, input-driven embedding (no external dependencies)
+        // Production: replace with real sentence-transformer or ONNX model
+        let seed = (req.prompt.len() + req.output.len()) as f32;
+        let mut current = [0.0f32; 64];
+        for i in 0..64 {
+            current[i] = ((seed + i as f32 * 0.37) % 6.28).sin() * 0.6 + 0.4;
+        }
+
+        self.spine.push_front(current);
+        if self.spine.len() > self.max_spine_size {
+            self.spine.pop_back();
+        }
 
         let spine_avg = self.weighted_spine_average();
-        let coherence = 0.95f64;
+
+        // Real normalized dot-product coherence (proxy for cosine similarity)
+        let mut dot = 0.0f64;
+        let mut norm_a = 0.0f64;
+        let mut norm_b = 0.0f64;
+        for i in 0..64 {
+            let a = current[i] as f64;
+            let b = spine_avg[i] as f64;
+            dot += a * b;
+            norm_a += a * a;
+            norm_b += b * b;
+        }
+        let coherence = if norm_a > 0.0 && norm_b > 0.0 {
+            (dot / (norm_a.sqrt() * norm_b.sqrt())).clamp(0.0, 1.0)
+        } else {
+            0.5
+        };
 
         let core_insight = if auto_insight && coherence >= self.coherence_threshold {
+            let mut delta_vec = [0i8; 64];
+            for i in 0..64 {
+                let diff = (current[i] - spine_avg[i]) * 127.0;
+                delta_vec[i] = diff.clamp(-128.0, 127.0) as i8;
+            }
             Some(CoreInsightToken {
                 lesson: "Decision aligns well with historical pattern.".to_string(),
                 confidence: coherence,
                 delta: Some(DeltaEmbedding {
-                    vector: [0; 64],
+                    vector: delta_vec,
                     confidence: coherence,
-                    delta_norm: 0.12,
+                    delta_norm: 0.18,
                 }),
             })
         } else {
@@ -122,12 +154,9 @@ impl PhoenixKernel {
 
         let canonical = format!("{:?}{:?}{:?}", req, coherence, self.reputation);
         let record_hash = blake3::hash(canonical.as_bytes());
-
-        // Signature: Ed25519 by default, hybrid with ML-DSA when quantum-proofing feature enabled
         let signature = self.signing_key.sign(record_hash.as_bytes()).to_bytes().to_vec();
 
-        let new_root = self.update_merkle_root(&record_hash);
-        self.merkle_root = new_root;
+        self.merkle_root = self.update_merkle_root(&record_hash);
 
         let record = SealedRecord {
             id: format!("aki_{}", Uuid::new_v4()),
