@@ -1,13 +1,15 @@
 [package]
-name = "agdr-aki"
+name = "agdr-phoenix"
 version = "1.8.0"
-edition = "2018"
+edition = "2021"
 license = "Apache-2.0 OR CC0-1.0"
+repository = "https://github.com/aiccountability-source/AgDR-Phoenix"
+readme = README.md
 description = "Atomic Kernel Inference SDK for Phoenix v1.8 Ultra"
 authors = ["Genesis Glass Foundation <founding@accountability.ai>"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module"] }
