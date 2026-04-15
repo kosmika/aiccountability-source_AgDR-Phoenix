@@ -4,16 +4,15 @@ version = "1.8.1"
 edition = "2021"
 license = "Apache-2.0 OR CC0-1.0"
 repository = "https://github.com/aiccountability-source/AgDR-Phoenix"
-readme = README.md
+readme = "README.md"
 description = "Atomic Kernel Inference SDK for Phoenix v1.8 Ultra"
 homepage = "https://www.accountability.ai"
 authors = ["Genesis Glass Foundation <founding@accountability.ai>"]
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["extension-module"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 blake3 = { version = "1.5", features = ["rayon", "std"] }
