@@ -1,4 +1,4 @@
-# AgDR-Phoenix v1.8.0
+# AgDR-Phoenix [![Version](https://img.shields.io/crates/v/agdr-aki)](https://crates.io/crates/agdr-aki)
 
 [![CI](https://github.com/aiccountability-source/AgDR-Phoenix/actions/workflows/ci.yml/badge.svg)](https://github.com/aiccountability-source/AgDR-Phoenix/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://spdx.org/licenses/Apache-2.0)
@@ -7,7 +7,7 @@
 
 [![Stewarded by GGF](https://img.shields.io/badge/Stewarded_by-Genesis_Glass_Foundation-4B0082.svg)](https://accountability.ai)
 
-**Atomic Kernel Inference SDK for Phoenix v1.8 Ultra**
+**Atomic Kernel Inference SDK for Phoenix v1.8.2 Ultra**
 
 Developed by the [Genesis Glass Foundation](https://accountability.ai) (Fondation Genèse Cristal)
 A federally incorporated Canadian not-for-profit.
